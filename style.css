@@ -5,9 +5,9 @@
 }
 
 body{
-    font-family:Arial, sans-serif;
     background:#121212;
     color:white;
+    font-family:Arial, sans-serif;
     min-height:100vh;
     display:flex;
     justify-content:center;
@@ -30,21 +30,17 @@ input{
     padding:12px;
     margin:8px 0;
     border:none;
-    border-radius:8px;
+    border-radius:10px;
     font-size:16px;
 }
 
 button{
     padding:12px 20px;
     border:none;
-    border-radius:8px;
+    border-radius:10px;
     cursor:pointer;
+    margin-top:10px;
     font-size:16px;
-    margin:5px;
-}
-
-button:hover{
-    opacity:0.9;
 }
 
 #players{
@@ -54,27 +50,27 @@ button:hover{
 .player{
     background:#222;
     padding:10px;
+    border-radius:10px;
     margin:5px 0;
-    border-radius:8px;
 }
 
-#startGame{
-    margin-top:20px;
+.host{
+    border:2px solid gold;
 }
 
 #gameArea{
     margin-top:30px;
     padding:20px;
-    background:#1d1d1d;
+    background:#1c1c1c;
     border-radius:12px;
 }
 
 .word{
     font-size:40px;
-    margin:20px 0;
+    margin-top:15px;
 }
 
 .impostor{
-    color:#ff5252;
-    font-size:30px;
+    color:#ff4d4d;
+    font-size:32px;
 }
