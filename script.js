@@ -4,9 +4,8 @@ import {
     getDatabase,
     ref,
     set,
-    push,
-    onValue,
-    get
+    get,
+    onValue
 } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
 
 const firebaseConfig = {
@@ -34,93 +33,112 @@ const WORDS = [
     "Train",
     "Football",
     "Banana",
-    "Elephant",
-    "Pencil",
-    "Bottle",
-    "Keyboard",
+    "Doctor",
+    "School",
     "Mountain",
     "Ocean",
-    "Bridge",
-    "School",
-    "Doctor",
-    "Burger",
-    "Helmet",
-    "Library",
     "Monkey",
-    "Diamond",
-    "Airport",
-    "Planet",
     "Robot",
-    "Volcano",
     "Castle",
+    "Diamond",
+    "Library",
+    "Airport",
     "Chocolate",
-    "Guitar",
-    "Microphone",
-    "Backpack",
-    "Umbrella",
-    "Clock",
-    "Firetruck",
     "Dragon",
-    "Submarine",
-    "Snowman",
-    "Pirate",
+    "Guitar",
+    "Backpack",
     "Satellite",
-    "Cactus",
+    "Whale",
+    "Volcano",
     "Jungle",
+    "Spider",
+    "Rainbow",
+    "Helmet",
+    "Burger",
+    "Clock",
+    "Torch",
+    "Planet",
+    "Submarine",
+    "Crown",
+    "Bridge",
+    "Bottle",
+    "Keyboard",
     "Telescope",
     "Magnet",
-    "Rainbow",
-    "Spider",
-    "Whale",
-    "Torch",
-    "Crown"
+    "Elephant",
+    "Pirate",
+    "Snowman",
+    "Firetruck",
+    "Microphone",
+    "Pencil",
+    "Cactus",
+    "Umbrella"
 ];
 
 let currentRoom = "";
 let myName = "";
-let myRoleShown = false;
+let isHost = false;
 
-function randomCode() {
-    return Math.random()
-        .toString(36)
-        .substring(2, 7)
-        .toUpperCase();
-}
+document.getElementById("joinBtn").onclick = joinRoom;
 
-document.getElementById("createRoom").onclick = () => {
+async function joinRoom(){
 
-    const room = randomCode();
+    const name =
+        document.getElementById("name")
+        .value
+        .trim();
 
-    currentRoom = room;
-
-    set(ref(db, "rooms/" + room), {
-        created: Date.now()
-    });
-
-    joinRoom(room);
-};
-
-document.getElementById("joinRoom").onclick = () => {
-
-    const room = document
-        .getElementById("roomCode")
+    const room =
+        document.getElementById("roomCode")
         .value
         .trim()
         .toUpperCase();
 
-    joinRoom(room);
-};
-
-function joinRoom(room){
-
-    const name = document
-        .getElementById("name")
-        .value
-        .trim();
-
-    if(!name){
-        alert("Enter your name");
+    if(!name || !room){
+        alert("Enter name and room code");
         return;
+    }
+
+    const roomRef = ref(db, "rooms/" + room);
+
+    const roomSnap = await get(roomRef);
+
+    if(!roomSnap.exists()){
+
+        await set(roomRef,{
+            host:name,
+            started:false,
+            players:{
+                [name]:{
+                    name:name
+                }
+            }
+        });
+
+        isHost = true;
+
+    }else{
+
+        const roomData = roomSnap.val();
+
+        if(roomData.started){
+            alert("Game already started");
+            return;
+        }
+
+        if(roomData.players && roomData.players[name]){
+            alert("Name already taken");
+            return;
+        }
+
+        await set(
+            ref(db,`rooms/${room}/players/${name}`),
+            {
+                name:name
+            }
+        );
+
+        isHost = roomData.host === name;
     }
 
     myName = name;
@@ -129,59 +147,92 @@ function joinRoom(room){
     document.getElementById("roomDisplay")
         .innerText = "Room: " + room;
 
-    push(
-        ref(db, "rooms/" + room + "/players"),
-        {
-            name:name
-        }
-    );
+    watchRoom();
+}
+
+function watchRoom(){
 
     onValue(
-        ref(db, "rooms/" + room + "/players"),
+        ref(db,"rooms/" + currentRoom),
         snapshot => {
 
-            const data = snapshot.val();
+            const room = snapshot.val();
+
+            if(!room) return;
 
             let html = "";
 
-            if(data){
+            Object.values(room.players || {})
+            .forEach(player => {
 
-                Object.values(data).forEach(player => {
-
-                    html += `
-                        <div class="player">
-                            ${player.name}
-                        </div>
-                    `;
-                });
-            }
+                html += `
+                    <div class="player ${player.name === room.host ? 'host' : ''}">
+                        ${player.name}
+                        ${player.name === room.host ? ' 👑' : ''}
+                    </div>
+                `;
+            });
 
             document.getElementById("players")
                 .innerHTML = html;
+
+            if(isHost && !room.started){
+
+                document.getElementById("hostArea")
+                    .innerHTML =
+                    `<button id="startGame">Start Game</button>`;
+
+                document.getElementById("startGame")
+                    .onclick = startGame;
+
+            }else if(!room.started){
+
+                document.getElementById("hostArea")
+                    .innerHTML =
+                    `<p>Waiting for host...</p>`;
+            }
+
+            if(room.started){
+
+                const role =
+                    room.roles?.[myName];
+
+                if(!role) return;
+
+                if(role.impostor){
+
+                    document.getElementById("gameArea")
+                        .innerHTML = `
+                        <div class="impostor">
+                            YOU ARE THE IMPOSTOR
+                        </div>
+                    `;
+
+                }else{
+
+                    document.getElementById("gameArea")
+                        .innerHTML = `
+                        <h2>Your Word</h2>
+                        <div class="word">
+                            ${role.word}
+                        </div>
+                    `;
+                }
+            }
         }
     );
-
-    watchGame();
 }
 
-document.getElementById("startGame").onclick = async () => {
+async function startGame(){
 
-    if(!currentRoom){
-        alert("Join a room first");
-        return;
-    }
-
-    const snapshot = await get(
-        ref(db, "rooms/" + currentRoom + "/players")
+    const roomSnap = await get(
+        ref(db,"rooms/" + currentRoom)
     );
 
-    const playersObj = snapshot.val();
+    const room = roomSnap.val();
 
-    if(!playersObj){
-        return;
-    }
-
-    const players = Object.values(playersObj);
+    const players =
+        Object.keys(room.players);
 
     if(players.length < 3){
         alert("Need at least 3 players");
@@ -189,125 +240,37 @@ document.getElementById("startGame").onclick = async () => {
     }
 
     const word =
-        WORDS[Math.floor(Math.random() * WORDS.length)];
+        WORDS[
+            Math.floor(
+                Math.random() * WORDS.length
+            )
+        ];
 
-    const impostorIndex =
-        Math.floor(Math.random() * players.length);
+    const impostor =
+        players[
+            Math.floor(
+                Math.random() * players.length
+            )
+        ];
 
     const roles = {};
 
-    players.forEach((player,index)=>{
+    players.forEach(player => {
 
-        roles[player.name] = {
-            impostor:index === impostorIndex,
-            word:word,
-            ready:false
+        roles[player] = {
+            impostor: player === impostor,
+            word: word
         };
 
     });
 
     await set(
-        ref(db,"rooms/" + currentRoom + "/game"),
-        {
-            started:true,
-            word:word,
-            roles:roles
-        }
-    );
-};
-
-function watchGame(){
-
-    onValue(
-        ref(db,"rooms/" + currentRoom + "/game"),
-        snapshot => {
-
-            const game = snapshot.val();
-
-            if(!game) return;
-            if(!game.started) return;
-
-            if(myRoleShown) return;
-
-            const role = game.roles[myName];
-
-            if(!role) return;
-
-            myRoleShown = true;
-
-            if(role.impostor){
-
-                document.getElementById("gameArea")
-                    .innerHTML = `
-                    <h2 class="impostor">
-                        YOU ARE THE IMPOSTOR
-                    </h2>
-
-                    <button id="readyBtn">
-                        I KNOW MY ROLE
-                    </button>
-                `;
-
-            }else{
-
-                document.getElementById("gameArea")
-                    .innerHTML = `
-                    <h2>Your Word</h2>
-
-                    <div class="word">
-                        ${role.word}
-                    </div>
-
-                    <button id="readyBtn">
-                        I KNOW MY ROLE
-                    </button>
-                `;
-            }
-
-            document
-                .getElementById("readyBtn")
-                .onclick = () => {
-
-                    set(
-                        ref(
-                            db,
-                            "rooms/" +
-                            currentRoom +
-                            "/game/roles/" +
-                            myName +
-                            "/ready"
-                        ),
-                        true
-                    );
-
-                    document.getElementById("gameArea")
-                        .innerHTML = `
-                        <h2>Waiting for others...</h2>
-                    `;
-                };
-        }
+        ref(db,"rooms/" + currentRoom + "/roles"),
+        roles
     );
 
-    onValue(
-        ref(db,"rooms/" + currentRoom + "/game/roles"),
-        snapshot => {
-
-            const roles = snapshot.val();
-
-            if(!roles) return;
-
-            const allReady =
-                Object.values(roles)
-                .every(role => role.ready);
-
-            if(allReady){
-
-                document.getElementById("gameArea")
-                    .innerHTML = `
-                    <h1>DISCUSSION TIME</h1>
-                    <p>Talk and find the impostor.</p>
-                `;
-            }
-        }
+    await set(
+        ref(db,"rooms/" + currentRoom + "/started"),
+        true
     );
 }
